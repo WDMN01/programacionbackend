@@ -1,7 +1,11 @@
+const fs = require("fs")
+
 class ProductManager{
-    constructor(){
+    constructor(path){
+        this.path =path;
         this.products =[];
         this.lastId = 0;
+        this.cargaProductos();
     }
     addProduct(producto){
         if (!this.validarObligatorios(producto)) {
@@ -14,8 +18,22 @@ class ProductManager{
         }
         const id= this.generarId();
         const productoId = {...producto, id};
-        this.products.push(productoId);    
+        this.products.push(productoId);
+        this.guardarProductos();   
     }
+
+    actualizarProducto(id, datosActualizados) {
+      const producto = this.getProductByI(id);
+      if (!producto) {
+        console.log("Error: No se encontró el producto.");
+        return;
+      }
+  
+      Object.assign(producto, datosActualizados);
+      this.guardarProductos();
+      console.log("Producto actualizado correctamente.");
+    }
+    //------------------------
     validarObligatorios(producto){
         return(
             producto.nombre && 
@@ -33,6 +51,11 @@ class ProductManager{
         this.lastId++;
         return this.lastId;
     }
+    eliminarProducto(id) {
+        this.products = this.products.filter((producto) => producto.id !== id);
+        this.guardarProductos();
+        console.log("PRODUCTO ELIMINADO")
+      }
     getProductByI(id){
         return this.products.find((producto)=>producto.id === id);
     }
@@ -48,26 +71,56 @@ class ProductManager{
           console.log(`  Stock: ${producto.stock}`);
         });
     }
+    guardarProductos() {
+        try {
+          fs.writeFileSync(this.path, JSON.stringify(this.products), "utf8");
+          console.log(`Productos guardados en: ${this.path}`);
+        } catch (err) {
+          console.log("Error al guardar los productos:", err);
+        }
+    }
+    cargaProductos() {
+        fs.readFile(this.path, "utf8", (err, data) => {
+          if (err) {
+            console.log("Error al cargar los productos:", err);
+          } else {
+            try {
+              this.products = JSON.parse(data);
+              console.log(`Productos cargados desde: ${this.path}`);
+              this.actualizarLastId();
+            } catch (error) {
+              console.log("Error al analizar los datos del archivo:", error);
+            }
+          }
+        });
+    }
+    actualizarLastId() {
+        if (this.products.length > 0) {
+          const maxId = Math.max(...this.products.map((producto) => producto.id));
+          this.lastId = maxId;
+        }
+      }
+
 }
 
-const productManager = new ProductManager();
+const productManager = new ProductManager("productos.json");
 
 const producto1 = {
-  nombre: "Camiseta",
-  descripcion: "Camiseta de algodón",
-  precio: 20,
-  imagen: "camiseta.jpg",
-  codigo: "CAM001",
-  stock: 10,
+  nombre: "Audifonos",
+  descripcion: "Audifonos Sony",
+  precio: 250000,
+  imagen: "AUSONY.jpg",
+  codigo: "SNQ122",
+  stock: 5,
 };
 
 const producto2 = {
-  nombre: "Pantalón",
-  descripcion: "Pantalón de mezclilla",
-  precio: 30,
-  imagen: "pantalon.jpg",
-  codigo: "PAN002",
-  stock: 5,
+  nombre: "Samsung S22",
+  descripcion: "Telefono Samsung S22",
+  precio: 4200000,
+  imagen: "s22.jpg",
+  codigo: "SPSS23",
+  stock: 15,
 };
 
 productManager.addProduct(producto1);
@@ -76,3 +129,11 @@ productManager.getproducts();
 
 const productofind = productManager.getProductByI(2);
 console.log("Producto encontrado:", productofind);
+productManager.eliminarProducto(1);
+productManager.getproducts();
+productManager.actualizarProducto(2, {
+  nombre: "Samsung S23",
+  precio: 5000000,
+  stock: 8,
+});
+productManager.getproducts();
