@@ -1,4 +1,4 @@
-const fs = require("fs")
+import { writeFileSync, readFile } from "fs";
 
 class ProductManager{
     constructor(path){
@@ -73,14 +73,14 @@ class ProductManager{
     }
     guardarProductos() {
         try {
-          fs.writeFileSync(this.path, JSON.stringify(this.products), "utf8");
+          writeFileSync(this.path, JSON.stringify(this.products), "utf8");
           console.log(`Productos guardados en: ${this.path}`);
         } catch (err) {
           console.log("Error al guardar los productos:", err);
         }
     }
     cargaProductos() {
-        fs.readFile(this.path, "utf8", (err, data) => {
+        readFile(this.path, "utf8", (err, data) => {
           if (err) {
             console.log("Error al cargar los productos:", err);
           } else {
@@ -129,7 +129,7 @@ productManager.getproducts();
 
 const productofind = productManager.getProductByI(2);
 console.log("Producto encontrado:", productofind);
-productManager.eliminarProducto(1);
+//productManager.eliminarProducto(1);
 productManager.getproducts();
 productManager.actualizarProducto(2, {
   nombre: "Samsung S23",
