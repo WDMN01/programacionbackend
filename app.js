@@ -1,9 +1,11 @@
 import express from "express";
+import cartRoutes from "./routes/cart_router.js";
 import fs from "fs";
 
 const app = express();
 
 app.use(express.json()); 
+app.use("/api", cartRoutes);
 
 let carts = [];
 let productos = [];
@@ -223,8 +225,8 @@ app.delete("/productos/:pid", (req, res) => {
   }
 });
 
-app.listen(4000, () => {
-  console.log("Servidor escuchando en el puerto 4000");
+app.listen(8080, () => {
+  console.log("Servidor escuchando en el puerto 8080");
 });
 
 function obtenerNuevoId(items) {
