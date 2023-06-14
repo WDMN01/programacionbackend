@@ -132,7 +132,7 @@ console.log("Producto encontrado:", productofind);
 //productManager.eliminarProducto(1);
 productManager.getproducts();
 productManager.actualizarProducto(2, {
-  nombre: "Samsung S23",
+  nombre: "Samsung S21",
   precio: 5000000,
   stock: 8,
 });
