@@ -1,14 +1,38 @@
 import express from "express";
+import handlebars from "express-handlebars";
+import __dirname from "./utils.js";
+import { createServer } from 'http';
+
+import {Server} from "socket.io";
 import cartRoutes from "./routes/cart_router.js";
+import viewrouter from "./routes/view_router.js"
 import fs from "fs";
+import { Socket } from "dgram";
+import { SocketAddress } from "net";
+import path from 'path';
+
+
 
 const app = express();
 
+app.engine('handlebars', handlebars.engine());
+
+
 app.use(express.json()); 
 app.use("/api", cartRoutes);
+app.use("/", viewrouter);
 
 let carts = [];
 let productos = [];
+
+app.set('views', path.join(__dirname, 'views'));
+
+
+
+app.set('view engine', 'handlebars');
+app.use(express.static(__dirname+'/public'));
+
+
 
 
 if (fs.existsSync("carts.json")) {
@@ -136,6 +160,9 @@ app.post("/productos", (req, res) => {
 
     res.status(201).json(newProduct);
   });
+
+  io.emit("newProduct", nuevoProducto);
+  res.status(201).json(nuevoProducto);
 });
 
 
@@ -223,11 +250,50 @@ app.delete("/productos/:pid", (req, res) => {
   } else {
     res.status(404).send("Producto no encontrado");
   }
+  io.emit("deleteProduct", productId);
+
+  res.status(204).send();
 });
 
-app.listen(8080, () => {
+const httpServer = app.listen(8080, () => {
   console.log("Servidor escuchando en el puerto 8080");
 });
+
+
+const io = new Server(httpServer);
+
+
+io.on("connection", socket => {
+  console.log("Nuevo cliente conectado");
+
+  // Escuchamos el evento 'newProduct' cuando se crea un nuevo producto
+  socket.on("newProduct", producto => {
+    // Enviamos el nuevo producto a todos los clientes conectados
+    io.emit("newProduct", producto);
+  });
+
+  // Escuchamos el evento 'deleteProduct' cuando se elimina un producto
+  socket.on("deleteProduct", productId => {
+    // Enviamos el ID del producto eliminado a todos los clientes conectados
+    io.emit("deleteProduct", productId);
+  });
+});
+
+
+app.get("/realtimeproducts", (req, res) => {
+  const isWebSocket = req.headers.upgrade && req.headers.upgrade.toLowerCase() === "websocket";
+  
+  if (isWebSocket) {
+    // Se está utilizando WebSocket
+    console.log("WebSocket connection");
+  } else {
+    // No se está utilizando WebSocket
+    console.log("HTTP connection");
+  }
+  
+  // Resto del código de manejo de la solicitud
+});
+
 
 function obtenerNuevoId(items) {
   let newId = 1;
@@ -237,3 +303,7 @@ function obtenerNuevoId(items) {
   }
   return newId;
 }
+
+export { app, io, httpServer };
+
+
