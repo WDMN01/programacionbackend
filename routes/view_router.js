@@ -3,8 +3,12 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFile } from 'fs';
 import { io } from "../app.js";
+import Message from "../app.js";
+ 
 
 const router = Router();
+
+
 
 // Obtener la ruta del directorio actual
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -46,6 +50,20 @@ router.get('/realtimeproducts', (req, res) => {
     res.render('layouts/realTimeProducts', { productos });
   });
 });
+
+router.get("/chat", async (req, res) => {
+  try {
+    // Obtener los mensajes almacenados en la colección "messages" de MongoDB
+    const messages = await Message.find();
+    res.render('layouts/chat', { messages });
+    
+  } catch (error) {
+    console.error("Error al obtener los mensajes:", error);
+    res.status(500).send("Error interno del servidor");
+  }
+});
+
+
 
 
 

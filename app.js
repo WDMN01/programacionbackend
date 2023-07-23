@@ -1,51 +1,53 @@
 import express from "express";
 import handlebars from "express-handlebars";
-import __dirname from "./utils.js";
-import { createServer } from 'http';
-
-import {Server} from "socket.io";
+import path from "path";
+import mongoose from "mongoose";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import cartRoutes from "./routes/cart_router.js";
-import viewrouter from "./routes/view_router.js"
-import fs from "fs";
-import { Socket } from "dgram";
-import { SocketAddress } from "net";
-import path from 'path';
+import viewrouter from "./routes/view_router.js";
+import Product from "./dao/models/productModel.js";
+import { v4 as uuidv4 } from "uuid";
+import __dirname from "./utils.js";
 
 
+const MONGODB_URI =
+  "mongodb+srv://coder:1234@cluster0.veee94b.mongodb.net/?retryWrites=true&w=majority";
+mongoose
+  .connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => {
+    console.log("Conexión a MongoDB exitosa");
+    cargarProductosIniciales();
+  })
+  .catch((error) => {
+    console.error("Error al conectar a MongoDB:", error);
+  });
 
 const app = express();
 
-app.engine('handlebars', handlebars.engine());
+let currentProductId = 0;
+function obtenerNuevoId() {
+  return currentProductId++;
+}
 
+app.engine("handlebars", handlebars.engine());
 
-app.use(express.json()); 
+app.use(express.json());
 app.use("/api", cartRoutes);
 app.use("/", viewrouter);
 
-let carts = [];
-let productos = [];
-
-app.set('views', path.join(__dirname, 'views'));
+app.set("views", path.join(__dirname, "views"));
 
 
-
-app.set('view engine', 'handlebars');
+app.set("view engine", "handlebars");
 app.use(express.static(__dirname+'/public'));
 
 
-
-
-if (fs.existsSync("carts.json")) {
-  const data = fs.readFileSync("carts.json", "utf8");
-  carts = JSON.parse(data);
-}
-
-
-if (fs.existsSync("productos.json")) {
-  const data = fs.readFileSync("productos.json", "utf8");
-  productos = JSON.parse(data);
-}
-
+let carts = [];
+let productos = [];
 
 app.post("/carts", (req, res) => {
   const newCart = {
@@ -55,17 +57,8 @@ app.post("/carts", (req, res) => {
 
   carts.push(newCart);
 
-  fs.writeFile("carts.json", JSON.stringify(carts), (err) => {
-    if (err) {
-      console.log("Error al escribir en el archivo de carritos:", err);
-      res.status(500).send("Error interno del servidor");
-      return;
-    }
-
-    res.status(201).json(newCart);
-  });
+  res.status(201).json(newCart);
 });
-
 
 app.get("/carts/:cid", (req, res) => {
   const cartId = parseInt(req.params.cid);
@@ -85,7 +78,6 @@ app.get("/carts/:cid", (req, res) => {
   res.json(cartProducts);
 });
 
-
 app.post("/carts/:cid/productos/:pid", (req, res) => {
   const cartId = parseInt(req.params.cid);
   const productId = parseInt(req.params.pid);
@@ -100,10 +92,8 @@ app.post("/carts/:cid/productos/:pid", (req, res) => {
   const productIndex = cart.products.findIndex((product) => product.product === productId);
 
   if (productIndex !== -1) {
-    
     cart.products[productIndex].quantity++;
   } else {
-    
     const newProduct = {
       product: productId,
       quantity: 1,
@@ -112,24 +102,12 @@ app.post("/carts/:cid/productos/:pid", (req, res) => {
     cart.products.push(newProduct);
   }
 
-  fs.writeFile("carts.json", JSON.stringify(carts), (err) => {
-    if (err) {
-      console.log("Error al escribir en el archivo de carritos:", err);
-      res.status(500).send("Error interno del servidor");
-      return;
-    }
-
-    const cartProducts = cart.products.map((product) => {
-      const cartProduct = productos.find((p) => p.id === product.product);
-      return { ...cartProduct, quantity: product.quantity };
-    });
-
-    res.json(cartProducts);
-  });
+  res.json(cart.products);
 });
 
+// ...
 
-app.post("/productos", (req, res) => {
+app.post("/productos", async (req, res) => {
   const { nombre, descripcion, precio, imagen, codigo, stock } = req.body;
 
   if (!nombre || !descripcion || !precio || !imagen || !codigo || !stock) {
@@ -137,173 +115,184 @@ app.post("/productos", (req, res) => {
     return;
   }
 
-  const newId = obtenerNuevoId(productos);
-
-  const newProduct = {
-    id: newId,
-    nombre,
-    descripcion,
-    precio,
-    imagen,
-    codigo,
-    stock,
-  };
-
-  productos.push(newProduct);
-
-  fs.writeFile("productos.json", JSON.stringify(productos), (err) => {
-    if (err) {
-      console.log("Error al escribir en el archivo de productos:", err);
-      res.status(500).send("Error interno del servidor");
-      return;
-    }
-
-    res.status(201).json(newProduct);
-  });
-
-  io.emit("newProduct", nuevoProducto);
-  res.status(201).json(nuevoProducto);
-});
-
-
-app.get("/productos", (req, res) => {
-  const limit = parseInt(req.query.limit);
-
-  if (limit && limit > 0) {
-    const productosLimitados = productos.slice(0, limit);
-    res.json(productosLimitados);
-  } else {
-    res.json(productos);
-  }
-});
-
-
-app.get("/productos/:pid", (req, res) => {
-  const productId = parseInt(req.params.pid);
-
-  const productoEncontrado = productos.find((producto) => producto.id === productId);
-
-  if (productoEncontrado) {
-    res.json(productoEncontrado);
-  } else {
-    res.status(404).send("Producto no encontrado");
-  }
-});
-
-
-app.put("/productos/:pid", (req, res) => {
-  const productId = parseInt(req.params.pid);
-  const { nombre, descripcion, precio, imagen, codigo, stock } = req.body;
-
-  if (!nombre || !descripcion || !precio || !imagen || !codigo || !stock) {
-    res.status(400).send("Todos los campos son obligatorios");
-    return;
-  }
-
-  const productIndex = productos.findIndex((producto) => producto.id === productId);
-
-  if (productIndex !== -1) {
-    const updatedProduct = {
-      id: productId,
+  try {
+    const newProduct = new Product({
+      _id: obtenerNuevoId(),
       nombre,
       descripcion,
       precio,
       imagen,
       codigo,
       stock,
-    };
-
-    productos[productIndex] = updatedProduct;
-
-    fs.writeFile("productos.json", JSON.stringify(productos), (err) => {
-      if (err) {
-        console.log("Error al escribir en el archivo de productos:", err);
-        res.status(500).send("Error interno del servidor");
-        return;
-      }
-
-      res.json(updatedProduct);
     });
-  } else {
-    res.status(404).send("Producto no encontrado");
+
+    const savedProduct = await newProduct.save();
+    res.status(201).json(savedProduct);
+  } catch (error) {
+    console.error("Error al guardar el producto en la base de datos:", error);
+    res.status(500).send("Error interno del servidor");
   }
 });
 
+// ...
 
-app.delete("/productos/:pid", (req, res) => {
-  const productId = parseInt(req.params.pid);
 
-  const productIndex = productos.findIndex((producto) => producto.id === productId);
+app.get("/productos", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit);
 
-  if (productIndex !== -1) {
-    productos.splice(productIndex, 1);
+    let productos;
+    if (limit && limit > 0) {
+      productos = await Product.find().limit(limit);
+    } else {
+      productos = await Product.find();
+    }
 
-    fs.writeFile("productos.json", JSON.stringify(productos), (err) => {
-      if (err) {
-        console.log("Error al escribir en el archivo de productos:", err);
-        res.status(500).send("Error interno del servidor");
-        return;
-      }
-
-      res.status(204).send();
-    });
-  } else {
-    res.status(404).send("Producto no encontrado");
+    res.json(productos);
+  } catch (error) {
+    console.error("Error al obtener productos desde la base de datos:", error);
+    res.status(500).send("Error interno del servidor");
   }
-  io.emit("deleteProduct", productId);
-
-  res.status(204).send();
 });
 
-const httpServer = app.listen(8080, () => {
-  console.log("Servidor escuchando en el puerto 8080");
-});
+// Resto de las rutas relacionadas con productos y carritos utilizando los modelos de Mongoose
+
+// Función para cargar productos iniciales desde FileSystem
+async function cargarProductosIniciales() {
+  // Puedes agregar aquí la lógica para cargar los productos iniciales desde FileSystem si lo deseas
+}
 
 
+const httpServer = createServer(app);
 const io = new Server(httpServer);
 
-
-io.on("connection", socket => {
+// Escuchamos el evento de conexión del cliente WebSocket
+io.on("connection", (socket) => {
   console.log("Nuevo cliente conectado");
 
+  // Emitir eventos personalizados a los clientes conectados
+
   // Escuchamos el evento 'newProduct' cuando se crea un nuevo producto
-  socket.on("newProduct", producto => {
+  socket.on("newProduct", (producto) => {
     // Enviamos el nuevo producto a todos los clientes conectados
     io.emit("newProduct", producto);
   });
 
   // Escuchamos el evento 'deleteProduct' cuando se elimina un producto
-  socket.on("deleteProduct", productId => {
+  socket.on("deleteProduct", (productId) => {
     // Enviamos el ID del producto eliminado a todos los clientes conectados
     io.emit("deleteProduct", productId);
   });
 });
 
+app.get("/productos/:pid", async (req, res) => {
+  const productId = parseInt(req.params.pid);
 
-app.get("/realtimeproducts", (req, res) => {
-  const isWebSocket = req.headers.upgrade && req.headers.upgrade.toLowerCase() === "websocket";
-  
-  if (isWebSocket) {
-    // Se está utilizando WebSocket
-    console.log("WebSocket connection");
-  } else {
-    // No se está utilizando WebSocket
-    console.log("HTTP connection");
+  try {
+    const product = await Product.findOne({ _id: productId });
+
+    if (!product) {
+      res.status(404).send("Producto no encontrado");
+      return;
+    }
+
+    res.json(product);
+  } catch (error) {
+    console.error("Error al obtener el producto desde la base de datos:", error);
+    res.status(500).send("Error interno del servidor");
   }
-  
-  // Resto del código de manejo de la solicitud
+});
+
+app.put("/productos/:pid", async (req, res) => {
+  const productId = req.params.pid;
+  const { nombre, descripcion, precio, imagen, codigo, stock } = req.body;
+
+  try {
+    // Verificar si el producto con el ID dado existe en la base de datos
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      res.status(404).send("Producto no encontrado");
+      return;
+    }
+
+    // Actualizar los campos del producto con los valores recibidos en el body de la solicitud
+    product.nombre = nombre;
+    product.descripcion = descripcion;
+    product.precio = precio;
+    product.imagen = imagen;
+    product.codigo = codigo;
+    product.stock = stock;
+
+    // Guardar el producto actualizado en la base de datos
+    const updatedProduct = await product.save();
+
+    res.json(updatedProduct);
+  } catch (error) {
+    console.error("Error al actualizar el producto en la base de datos:", error);
+    res.status(500).send("Error interno del servidor");
+  }
+});
+
+app.delete("/productos/:pid", async (req, res) => {
+  const productId = req.params.pid;
+
+  try {
+    // Verificar si el producto con el ID dado existe en la base de datos
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      res.status(404).send("Producto no encontrado");
+      return;
+    }
+
+    // Eliminar el producto de la base de datos
+    await Product.deleteOne({ _id: productId });
+
+    res.send("Producto eliminado exitosamente");
+  } catch (error) {
+    console.error("Error al eliminar el producto de la base de datos:", error);
+    res.status(500).send("Error interno del servidor");
+  }
 });
 
 
-function obtenerNuevoId(items) {
-  let newId = 1;
-  if (items.length > 0) {
-    const ids = items.map((item) => item.id);
-    newId = Math.max(...ids) + 1;
-  }
-  return newId;
-}
+// Ruta para mostrar la vista del chat
+
+
+// Escuchamos el evento 'message' cuando se recibe un nuevo mensaje desde el cliente
+io.on("connection", (socket) => {
+  console.log("Nuevo cliente conectado");
+
+  // Escuchamos el evento 'message' cuando se recibe un nuevo mensaje desde el cliente
+  socket.on("message", async (data) => {
+    try {
+      // Guardar el nuevo mensaje en la colección "messages" de MongoDB
+      await Message.create({ user: data.user, message: data.message });
+
+      // Emitir el mensaje a todos los clientes conectados para que se muestre en el chat
+      io.emit('message', data);
+    } catch (error) {
+      console.error("Error al guardar el mensaje en la base de datos:", error);
+    }
+  });
+
+  
+});
+
+
+const messageSchema = new mongoose.Schema({
+  user: String,
+  message: String
+});
+
+const Message = mongoose.model("Message", messageSchema);
+
+export default Message;
+
+httpServer.listen(8080, () => {
+  console.log("Servidor escuchando en el puerto 8080");
+});
+
 
 export { app, io, httpServer };
-
-
