@@ -1,14 +1,44 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Home</title>
-  </head>
-  <body>
-    <h1>Listado de productos</h1>
-    <ul>
-      {{#each productos}}
-        <li>{{nombre}} - {{precio}}</li>
-      {{/each}}
-    </ul>
-  </body>
+<head>
+  <title>Real-Time Products</title>
+</head>
+<body>
+  <h1>Listado de productos en tiempo real</h1>
+  <ul>
+    {{#each products}}
+    <li>
+      <strong>Nombre:</strong> {{nombre}}
+      <br>
+      <strong>Descripción:</strong> {{descripcion}}
+      <br>
+      <strong>Precio:</strong> {{precio}}
+    </li>
+    {{/each}}
+  </ul>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Conectar el cliente al servidor de Socket.IO
+    const socket = io();
+
+    // Escuchar el evento 'productos' para recibir los productos desde el servidor
+    socket.on('productos', (productos) => {
+      // Actualizar la lista de productos en tiempo real
+      const productsList = document.querySelector('ul');
+      productsList.innerHTML = '';
+
+      productos.forEach((producto) => {
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+          <strong>Nombre:</strong> ${producto.nombre}
+          <br>
+          <strong>Descripción:</strong> ${producto.descripcion}
+          <br>
+          <strong>Precio:</strong> ${producto.precio}
+        `;
+        productsList.appendChild(listItem);
+      });
+    });
+  </script>
+</body>
 </html>

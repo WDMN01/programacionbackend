@@ -7,12 +7,16 @@ import { Server } from "socket.io";
 import cartRoutes from "./routes/cart_router.js";
 import viewrouter from "./routes/view_router.js";
 import Product from "./dao/models/productModel.js";
-import { v4 as uuidv4 } from "uuid";
-import __dirname from "./utils.js";
+import { v4 as uuidv4 } from "uuid"
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const MONGODB_URI =
-  "mongodb+srv://coder:1234@cluster0.veee94b.mongodb.net/?retryWrites=true&w=majority";
+  "mongodb+srv://coder:1234@cluster0.rym7s8w.mongodb.net/?retryWrites=true&w=majority";
 mongoose
   .connect(MONGODB_URI, {
     useNewUrlParser: true,
@@ -30,7 +34,7 @@ const app = express();
 
 let currentProductId = 0;
 function obtenerNuevoId() {
-  return currentProductId++;
+  return uuidv4();
 }
 
 app.engine("handlebars", handlebars.engine());
@@ -49,82 +53,26 @@ app.use(express.static(__dirname+'/public'));
 let carts = [];
 let productos = [];
 
-app.post("/carts", (req, res) => {
-  const newCart = {
-    id: obtenerNuevoId(carts),
-    products: [],
-  };
-
-  carts.push(newCart);
-
-  res.status(201).json(newCart);
-});
-
-app.get("/carts/:cid", (req, res) => {
-  const cartId = parseInt(req.params.cid);
-
-  const cart = carts.find((cart) => cart.id === cartId);
-
-  if (!cart) {
-    res.status(404).send("Carrito no encontrado");
-    return;
-  }
-
-  const cartProducts = cart.products.map((product) => {
-    const cartProduct = productos.find((p) => p.id === product.product);
-    return { ...cartProduct, quantity: product.quantity };
-  });
-
-  res.json(cartProducts);
-});
-
-app.post("/carts/:cid/productos/:pid", (req, res) => {
-  const cartId = parseInt(req.params.cid);
-  const productId = parseInt(req.params.pid);
-
-  const cart = carts.find((cart) => cart.id === cartId);
-
-  if (!cart) {
-    res.status(404).send("Carrito no encontrado");
-    return;
-  }
-
-  const productIndex = cart.products.findIndex((product) => product.product === productId);
-
-  if (productIndex !== -1) {
-    cart.products[productIndex].quantity++;
-  } else {
-    const newProduct = {
-      product: productId,
-      quantity: 1,
-    };
-
-    cart.products.push(newProduct);
-  }
-
-  res.json(cart.products);
-});
-
-// ...
 
 app.post("/productos", async (req, res) => {
-  const { nombre, descripcion, precio, imagen, codigo, stock } = req.body;
+  const { nombre, descripcion, precio, imagen, stock } = req.body;
 
-  if (!nombre || !descripcion || !precio || !imagen || !codigo || !stock) {
+  if (!nombre || !descripcion || !precio || !imagen || !stock) {
     res.status(400).send("Todos los campos son obligatorios");
     return;
   }
 
   try {
     const newProduct = new Product({
-      _id: obtenerNuevoId(),
       nombre,
       descripcion,
       precio,
       imagen,
-      codigo,
       stock,
     });
+
+    // Generar un valor único para el campo 'codigo' utilizando uuidv4()
+    newProduct.codigo = uuidv4();
 
     const savedProduct = await newProduct.save();
     res.status(201).json(savedProduct);
@@ -134,62 +82,87 @@ app.post("/productos", async (req, res) => {
   }
 });
 
+
 // ...
 
 
 app.get("/productos", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit);
+    
+    const { limit = 10, page = 1, sort, query } = req.query;
+    const sortOrder = sort === "desc" ? -1 : 1;
 
-    let productos;
-    if (limit && limit > 0) {
-      productos = await Product.find().limit(limit);
-    } else {
-      productos = await Product.find();
-    }
+    
+    const searchQuery = query ? { categoria: query } : {};
 
-    res.json(productos);
+    
+    const totalProducts = await Product.countDocuments(searchQuery);
+
+    
+    const skip = (page - 1) * limit;
+
+    
+    const productos = await Product.find(searchQuery)
+      .sort({ precio: sortOrder })
+      .skip(skip)
+      .limit(Number(limit));
+
+    
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    
+    const response = {
+      status: "success",
+      payload: productos,
+      totalPages,
+      prevPage: page > 1 ? page - 1 : null,
+      nextPage: page < totalPages ? page + 1 : null,
+      page: Number(page),
+      hasPrevPage: page > 1,
+      hasNextPage: page < totalPages,
+      prevLink: page > 1 ? `/productos?limit=${limit}&page=${page - 1}&sort=${sort}&query=${query}` : null,
+      nextLink: page < totalPages ? `/productos?limit=${limit}&page=${page + 1}&sort=${sort}&query=${query}` : null,
+    };
+
+    res.json(response);
   } catch (error) {
     console.error("Error al obtener productos desde la base de datos:", error);
-    res.status(500).send("Error interno del servidor");
+    res.status(500).json({ status: "error", message: "Error interno del servidor" });
   }
 });
 
-// Resto de las rutas relacionadas con productos y carritos utilizando los modelos de Mongoose
 
-// Función para cargar productos iniciales desde FileSystem
+
 async function cargarProductosIniciales() {
-  // Puedes agregar aquí la lógica para cargar los productos iniciales desde FileSystem si lo deseas
+  
 }
 
 
 const httpServer = createServer(app);
 const io = new Server(httpServer);
 
-// Escuchamos el evento de conexión del cliente WebSocket
+
 io.on("connection", (socket) => {
   console.log("Nuevo cliente conectado");
 
-  // Emitir eventos personalizados a los clientes conectados
-
-  // Escuchamos el evento 'newProduct' cuando se crea un nuevo producto
+  
   socket.on("newProduct", (producto) => {
     // Enviamos el nuevo producto a todos los clientes conectados
     io.emit("newProduct", producto);
   });
 
-  // Escuchamos el evento 'deleteProduct' cuando se elimina un producto
+  
   socket.on("deleteProduct", (productId) => {
-    // Enviamos el ID del producto eliminado a todos los clientes conectados
+    
     io.emit("deleteProduct", productId);
   });
 });
 
 app.get("/productos/:pid", async (req, res) => {
-  const productId = parseInt(req.params.pid);
+  const productId = req.params.pid;
 
   try {
-    const product = await Product.findOne({ _id: productId });
+    const product = await Product.findById(productId);
 
     if (!product) {
       res.status(404).send("Producto no encontrado");
@@ -198,8 +171,8 @@ app.get("/productos/:pid", async (req, res) => {
 
     res.json(product);
   } catch (error) {
-    console.error("Error al obtener el producto desde la base de datos:", error);
-    res.status(500).send("Error interno del servidor");
+    console.error("Error al obtener el producto:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 });
 
@@ -257,10 +230,7 @@ app.delete("/productos/:pid", async (req, res) => {
 });
 
 
-// Ruta para mostrar la vista del chat
 
-
-// Escuchamos el evento 'message' cuando se recibe un nuevo mensaje desde el cliente
 io.on("connection", (socket) => {
   console.log("Nuevo cliente conectado");
 
