@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 const { Schema } = mongoose;
 
 const productSchema = new Schema({
-  // No es necesario definir el campo _id, ya que mongoose generará un ObjectId automáticamente.
+  
   nombre: {
     type: String,
     required: true,

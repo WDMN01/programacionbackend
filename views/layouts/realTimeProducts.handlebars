@@ -18,12 +18,8 @@
   </ul>
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Conectar el cliente al servidor de Socket.IO
     const socket = io();
-
-    // Escuchar el evento 'productos' para recibir los productos desde el servidor
     socket.on('productos', (productos) => {
-      // Actualizar la lista de productos en tiempo real
       const productsList = document.querySelector('ul');
       productsList.innerHTML = '';
 

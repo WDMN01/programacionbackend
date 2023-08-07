@@ -1,19 +1,23 @@
-{{!-- products.handlebars --}}
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <title>Listado de Productos</title>
 </head>
 <body>
-  <h1>Listado de Productos</h1>
+  <h1>Bienvenido a la Tienda</h1>
 
+{{#ifEqual user.role 'admin'}}
+  <p>Bienvenido, {{user.first_name}} {{user.last_name}} ({{user.email}}), eres un administrador.</p>
+{{else}}
+  <p>Bienvenido, {{user.first_name}} {{user.last_name}} ({{user.email}}), eres un usuario.</p>
+{{/ifEqual}}
+
+  <a href="/logout">Cerrar sesión</a>
   {{#each products}}
   <div class="product">
     <h3>{{nombre}}</h3>
     <p>{{descripcion}}</p>
     <p>Precio: ${{precio}}</p>
-    {{!-- Corregir la ruta de la acción del formulario para agregar al carrito --}}
     <form action="/api/carts/{{cartId}}/productos/{{_id}}" method="post">
       <label for="quantity">Cantidad:</label>
       <input type="number" name="quantity" id="quantity" value="1" min="1">

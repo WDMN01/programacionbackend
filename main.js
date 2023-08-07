@@ -129,7 +129,6 @@ productManager.getproducts();
 
 const productofind = productManager.getProductByI(2);
 console.log("Producto encontrado:", productofind);
-//productManager.eliminarProducto(1);
 productManager.getproducts();
 productManager.actualizarProducto(2, {
   nombre: "Samsung S21",

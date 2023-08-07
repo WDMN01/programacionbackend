@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Cart from "../dao/models/cartModel.js";
 import Product from "../dao/models/productModel.js";
-import mongoose from "mongoose"; // Importa mongoose
+import mongoose from "mongoose"; 
 const router = Router();
 
 
@@ -11,7 +11,7 @@ router.post("/carts", async (req, res) => {
       products: [],
     });
 
-    await newCart.save(); // Guardar el nuevo carrito en MongoDB
+    await newCart.save(); 
 
     res.status(201).json(newCart);
   } catch (error) {
@@ -44,7 +44,7 @@ router.get("/carts/:cid", async (req, res) => {
 
 router.post("/carts/:cid/productos/:pid", async (req, res) => {
   const cartId = req.params.cid;
-  const productId = req.params.pid.trim().replace("\n", ""); // Eliminar caracteres no deseados
+  const productId = req.params.pid.trim().replace("\n", ""); 
 
   console.log("cartId:", cartId);
   console.log("productId:", productId);
@@ -68,18 +68,16 @@ router.post("/carts/:cid/productos/:pid", async (req, res) => {
 
     console.log("product:", product);
 
-    // Verificar si el producto ya está en el carrito
     const productInCart = cart.products.find((item) => item.product.equals(productId));
 
     if (productInCart) {
-      // Si el producto ya está en el carrito, actualizar la cantidad
       productInCart.quantity++;
     } else {
-      // Si el producto no está en el carrito, agregarlo al array de productos del carrito
+      
       cart.products.push({ product: productId, quantity: 1 });
     }
 
-    await cart.save(); // Guardar el carrito actualizado en MongoDB
+    await cart.save(); 
 
     res.json({ message: 'Producto agregado al carrito exitosamente', cart });
   } catch (error) {
@@ -87,14 +85,6 @@ router.post("/carts/:cid/productos/:pid", async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
-
-
-
-
-
-
-
-
 
 router.delete('/carts/:cid/products/:pid', async (req, res) => {
   const { cid, pid } = req.params;
@@ -117,20 +107,17 @@ router.delete('/carts/:cid/products/:pid', async (req, res) => {
 
 router.put('/carts/:cid', async (req, res) => {
   const { cid } = req.params;
-  const updatedProducts = req.body; // El cuerpo de la solicitud contiene el arreglo de productos actualizado
+  const updatedProducts = req.body; 
 
   try {
-    // Obtener el carrito existente de la base de datos
     const cart = await Cart.findById(cid);
 
     if (!cart) {
       return res.status(404).json({ message: 'Carrito no encontrado' });
     }
 
-    // Actualizar el arreglo de productos del carrito con los datos recibidos en el cuerpo de la solicitud
     cart.products = updatedProducts;
 
-    // Guardar los cambios en el carrito actualizado en la base de datos
     await cart.save();
 
     res.json({ message: 'Carrito actualizado exitosamente', cart });
@@ -139,9 +126,6 @@ router.put('/carts/:cid', async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
-
-
-
 
 router.put('/carts/:cid/products/:pid', async (req, res) => {
   const { cid, pid } = req.params;
@@ -178,10 +162,8 @@ router.delete('/carts/:cid', async (req, res) => {
       return res.status(404).json({ message: 'Carrito no encontrado' });
     }
 
-    // Vaciar el array de productos del carrito
     cart.products = [];
 
-    // Guardar los cambios en el carrito actualizado en la base de datos
     await cart.save();
 
     res.json({ message: 'Carrito vaciado exitosamente' });

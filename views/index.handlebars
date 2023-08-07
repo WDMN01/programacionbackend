@@ -4,18 +4,10 @@
 
 <script>
   const socket = io();
-
-  // Escuchamos el evento 'updateProducts' para actualizar la lista de productos cuando se crea uno nuevo
   socket.on("updateProducts", producto => {
-    // Actualizamos la lista de productos en la vista
-    // Aquí puedes agregar tu lógica para mostrar el nuevo producto en la lista
     console.log("Producto creado:", producto);
   });
-
-  // Escuchamos el evento 'removeProduct' para eliminar un producto de la lista cuando se elimina
   socket.on("removeProduct", productId => {
-    // Eliminamos el producto de la lista en la vista
-    // Aquí puedes agregar tu lógica para eliminar el producto de la lista
     console.log("Producto eliminado:", productId);
   });
 </script>

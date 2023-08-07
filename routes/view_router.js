@@ -6,12 +6,25 @@ import { io } from "../app.js";
 import Message from "../app.js";
 import Product from '../dao/models/productModel.js';
 import Cart from '../dao/models/cartModel.js'; 
+import User from '../dao/models/userModel.js';
+import express from 'express';
+import bcrypt from 'bcrypt';
+import handlebars from 'handlebars';
+import { allowInsecurePrototypeAccess } from '@handlebars/allow-prototype-access';
+import exphbs from 'express-handlebars';
 
 const router = Router();
 
+handlebars.registerHelper('ifEqual', function (arg1, arg2, options) {
+  return arg1 === arg2 ? options.fn(this) : options.inverse(this);
+});
 
 
-// Obtener la ruta del directorio actual
+const hbs = exphbs.create({
+ 
+  handlebars: allowInsecurePrototypeAccess(handlebars)
+});
+
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
 router.get('/home', (req, res) => {
@@ -31,14 +44,13 @@ router.get('/home', (req, res) => {
 //--------------------
 router.get('/realtimeproducts', async (req, res) => {
   try {
-    // Obtener los productos de la base de datos
+
     const products = await Product.find();
 
-    // Configurar el evento de conexión del cliente WebSocket
     io.on("connection", socket => {
       console.log("Nuevo cliente conectado a la vista de productos en tiempo real");
 
-      // Emitir los productos al cliente conectado
+
       socket.emit("productos", products);
     });
 
@@ -53,7 +65,7 @@ router.get('/realtimeproducts', async (req, res) => {
 
 router.get("/chat", async (req, res) => {
   try {
-    // Obtener los mensajes almacenados en la colección "messages" de MongoDB
+
     const messages = await Message.find();
     res.render('layouts/chat', { messages });
     
@@ -77,15 +89,16 @@ router.get('/products', async (req, res) => {
       .limit(Number(limit));
 
     const totalPages = Math.ceil(totalProducts / limit);
-
+    const user = req.session.user;
     res.render('layouts/products', {
       products: products.map(product => ({
         _id: product._id,
         nombre: product.nombre,
         descripcion: product.descripcion,
         precio: product.precio,
-        cartId: '64c0be9764940b2a6dcfe013' // Reemplaza con el ID del carrito real
+        cartId: '64c0be9764940b2a6dcfe013' 
       })),
+      user: user,
       currentPage: page,
       totalPages,
       prevPage: page > 1 ? page - 1 : null,
@@ -117,7 +130,7 @@ router.get('/products/:pid', async (req, res) => {
         nombre: product.nombre,
         descripcion: product.descripcion,
         precio: product.precio,
-        // Asegúrate de agregar otros campos del producto que necesites en la vista
+
       }
     });
   } catch (error) {
@@ -142,6 +155,109 @@ router.get('/api/carts/:cid', async (req, res) => {
     console.error('Error al obtener el carrito:', error);
     res.status(500).json({ message: 'Error interno del servidor' });
   }
+});
+
+
+
+const checkLogin = (req, res, next) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  next();
+};
+
+router.get('/login', (req, res) => {
+  if (req.session.user) {
+    return res.redirect('/profile'); 
+  }
+  res.render('layouts/login'); 
+});
+
+router.get('/register', (req, res) => {
+  if (req.session.user) {
+    return res.redirect('/profile'); 
+  }
+  res.render('layouts/register'); 
+});
+
+
+router.get('/profile', checkLogin, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.user._id);
+    if (!user) {
+      req.session.destroy();
+      return res.redirect('/login');
+    }
+    
+
+    const userData = {
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      age: user.age,
+    };
+    
+    res.render('layouts/profile', { user: userData });
+  } catch (error) {
+    console.error('Error al obtener perfil:', error);
+    res.status(500).send('Error interno del servidor');
+  }
+});
+
+
+
+
+router.post('/register', async (req, res) => {
+  const { first_name, last_name, email, age, password } = req.body;
+  
+  try {
+    const newUser = new User({
+      first_name,
+      last_name,
+      email,
+      age,
+      password,  
+    });
+
+    const savedUser = await newUser.save();
+
+    console.log('Registro exitoso:', savedUser);
+
+    res.status(201).json({ message: 'Registro exitoso', user: savedUser });
+  } catch (error) {
+    console.error('Error al registrar usuario:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+
+
+
+
+router.post('/login', async (req, res) => {
+  try {
+
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+
+
+    if (email === 'adminCoder@coder.com' && password === 'adminCod3r123') {
+      user.role = 'admin'; 
+    }
+
+    req.session.user = user;
+
+    res.json({ message: 'Inicio de sesión exitoso' });
+  } catch (error) {
+    console.error('Error al iniciar sesión:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+router.get('/logout', (req, res) => {
+  req.session.destroy(); 
+  res.redirect('/login'); 
 });
 
 

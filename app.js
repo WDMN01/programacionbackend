@@ -10,6 +10,9 @@ import Product from "./dao/models/productModel.js";
 import { v4 as uuidv4 } from "uuid"
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import session from "express-session";
+import MongoStore from "connect-mongo";
+import bcrypt from "bcrypt";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,11 +34,21 @@ mongoose
   });
 
 const app = express();
+app.use(express.urlencoded({ extended: true }));
 
 let currentProductId = 0;
 function obtenerNuevoId() {
   return uuidv4();
 }
+
+
+app.use(session({
+  secret: 'secretkey',
+  resave: false,
+  saveUninitialized: true,
+  store: MongoStore.create({ mongoUrl: MONGODB_URI }), 
+}));
+
 
 app.engine("handlebars", handlebars.engine());
 
@@ -44,8 +57,6 @@ app.use("/api", cartRoutes);
 app.use("/", viewrouter);
 
 app.set("views", path.join(__dirname, "views"));
-
-
 app.set("view engine", "handlebars");
 app.use(express.static(__dirname+'/public'));
 
@@ -71,7 +82,7 @@ app.post("/productos", async (req, res) => {
       stock,
     });
 
-    // Generar un valor único para el campo 'codigo' utilizando uuidv4()
+
     newProduct.codigo = uuidv4();
 
     const savedProduct = await newProduct.save();
@@ -82,8 +93,6 @@ app.post("/productos", async (req, res) => {
   }
 });
 
-
-// ...
 
 
 app.get("/productos", async (req, res) => {
@@ -147,7 +156,7 @@ io.on("connection", (socket) => {
 
   
   socket.on("newProduct", (producto) => {
-    // Enviamos el nuevo producto a todos los clientes conectados
+   
     io.emit("newProduct", producto);
   });
 
@@ -181,7 +190,7 @@ app.put("/productos/:pid", async (req, res) => {
   const { nombre, descripcion, precio, imagen, codigo, stock } = req.body;
 
   try {
-    // Verificar si el producto con el ID dado existe en la base de datos
+    
     const product = await Product.findById(productId);
 
     if (!product) {
@@ -189,7 +198,7 @@ app.put("/productos/:pid", async (req, res) => {
       return;
     }
 
-    // Actualizar los campos del producto con los valores recibidos en el body de la solicitud
+    
     product.nombre = nombre;
     product.descripcion = descripcion;
     product.precio = precio;
@@ -197,7 +206,7 @@ app.put("/productos/:pid", async (req, res) => {
     product.codigo = codigo;
     product.stock = stock;
 
-    // Guardar el producto actualizado en la base de datos
+    
     const updatedProduct = await product.save();
 
     res.json(updatedProduct);
@@ -211,7 +220,7 @@ app.delete("/productos/:pid", async (req, res) => {
   const productId = req.params.pid;
 
   try {
-    // Verificar si el producto con el ID dado existe en la base de datos
+    
     const product = await Product.findById(productId);
 
     if (!product) {
@@ -219,7 +228,7 @@ app.delete("/productos/:pid", async (req, res) => {
       return;
     }
 
-    // Eliminar el producto de la base de datos
+    
     await Product.deleteOne({ _id: productId });
 
     res.send("Producto eliminado exitosamente");
@@ -234,13 +243,11 @@ app.delete("/productos/:pid", async (req, res) => {
 io.on("connection", (socket) => {
   console.log("Nuevo cliente conectado");
 
-  // Escuchamos el evento 'message' cuando se recibe un nuevo mensaje desde el cliente
   socket.on("message", async (data) => {
     try {
-      // Guardar el nuevo mensaje en la colección "messages" de MongoDB
+     
       await Message.create({ user: data.user, message: data.message });
 
-      // Emitir el mensaje a todos los clientes conectados para que se muestre en el chat
       io.emit('message', data);
     } catch (error) {
       console.error("Error al guardar el mensaje en la base de datos:", error);
