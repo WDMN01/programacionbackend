@@ -1,4 +1,5 @@
 import express from "express";
+import exphbs from 'express-handlebars';
 import handlebars from "express-handlebars";
 import path from "path";
 import mongoose from "mongoose";
@@ -13,11 +14,16 @@ import { dirname } from "path";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import bcrypt from "bcrypt";
-
+import passport from 'passport';
+import LocalStrategy from 'passport-local';
+import User from './dao/models/userModel.js';
+import flash from 'connect-flash';
+import { allowInsecurePrototypeAccess } from '@handlebars/allow-prototype-access';
+import { Strategy as GitHubStrategy } from 'passport-github2'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
+const app = express();
 const MONGODB_URI =
   "mongodb+srv://coder:1234@cluster0.rym7s8w.mongodb.net/?retryWrites=true&w=majority";
 mongoose
@@ -33,26 +39,29 @@ mongoose
     console.error("Error al conectar a MongoDB:", error);
   });
 
-const app = express();
+
 app.use(express.urlencoded({ extended: true }));
-
-let currentProductId = 0;
-function obtenerNuevoId() {
-  return uuidv4();
-}
-
-
+app.use(express.json());
 app.use(session({
   secret: 'secretkey',
   resave: false,
   saveUninitialized: true,
   store: MongoStore.create({ mongoUrl: MONGODB_URI }), 
 }));
-
+app.use(passport.initialize());
+app.use(passport.session());
+app.use(flash());
+const hbs = exphbs.create({
+  handlebars: allowInsecurePrototypeAccess(handlebars)
+});
+let currentProductId = 0;
+function obtenerNuevoId() {
+  return uuidv4();
+}
 
 app.engine("handlebars", handlebars.engine());
 
-app.use(express.json());
+
 app.use("/api", cartRoutes);
 app.use("/", viewrouter);
 
@@ -63,6 +72,75 @@ app.use(express.static(__dirname+'/public'));
 
 let carts = [];
 let productos = [];
+passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return done(null, false, { message: 'Incorrect email' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatch) {
+      return done(null, false, { message: 'Incorrect password' });
+    }
+
+    return done(null, user);
+  } catch (error) {
+    return done(error);
+  }
+}));
+passport.serializeUser(function(user, done) {
+  done(null, user._id);
+});
+
+passport.deserializeUser(async function(id, done) {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (error) {
+    done(error);
+  }
+});
+
+
+passport.use(new GitHubStrategy({
+  clientID: "Iv1.526e323e475e8396",
+  clientSecret: "8f55810432c91516bcf74ad52afc9283d1ef79b4",
+  callbackURL: 'http://localhost:8080/api/sessions/githubcallback', 
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+   
+    const user = await User.findOne({ githubId: profile.id });
+    if (user) {
+      return done(null, user);
+    }
+    
+    const newUser = new User({
+      githubId: profile.id,
+    
+    });
+    await newUser.save();
+    return done(null, newUser);
+
+    
+    done(null, user); 
+    done(null, false); 
+
+  } catch (error) {
+    done(error); 
+  }
+}));
+
+app.get('/api/sessions/githubcallback',
+  passport.authenticate('github', { failureRedirect: '/login' }),
+  function(req, res) {
+    
+    res.redirect('/products');
+  }
+);
+
 
 
 app.post("/productos", async (req, res) => {
@@ -258,6 +336,7 @@ io.on("connection", (socket) => {
 });
 
 
+
 const messageSchema = new mongoose.Schema({
   user: String,
   message: String
@@ -270,6 +349,4 @@ export default Message;
 httpServer.listen(8080, () => {
   console.log("Servidor escuchando en el puerto 8080");
 });
-
-
 export { app, io, httpServer };

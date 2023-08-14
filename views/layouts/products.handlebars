@@ -6,13 +6,10 @@
 <body>
   <h1>Bienvenido a la Tienda</h1>
 
-{{#ifEqual user.role 'admin'}}
-  <p>Bienvenido, {{user.first_name}} {{user.last_name}} ({{user.email}}), eres un administrador.</p>
-{{else}}
   <p>Bienvenido, {{user.first_name}} {{user.last_name}} ({{user.email}}), eres un usuario.</p>
-{{/ifEqual}}
 
   <a href="/logout">Cerrar sesión</a>
+
   {{#each products}}
   <div class="product">
     <h3>{{nombre}}</h3>
@@ -25,7 +22,7 @@
     </form>
     <a href="/products/{{_id}}">Ver detalles</a>
   </div>
-{{/each}}
+  {{/each}}
 
 </body>
 </html>

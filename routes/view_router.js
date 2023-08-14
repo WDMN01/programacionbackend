@@ -12,6 +12,8 @@ import bcrypt from 'bcrypt';
 import handlebars from 'handlebars';
 import { allowInsecurePrototypeAccess } from '@handlebars/allow-prototype-access';
 import exphbs from 'express-handlebars';
+import passport from 'passport';
+import LocalStrategy from 'passport-local';
 
 const router = Router();
 
@@ -19,13 +21,67 @@ handlebars.registerHelper('ifEqual', function (arg1, arg2, options) {
   return arg1 === arg2 ? options.fn(this) : options.inverse(this);
 });
 
-
 const hbs = exphbs.create({
- 
   handlebars: allowInsecurePrototypeAccess(handlebars)
 });
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
+
+const checkLogin = (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect('/login'); 
+  }
+  next(); 
+};
+
+
+passport.serializeUser(function(user, done) {
+  done(null, user._id);
+});
+
+passport.deserializeUser(async function(id, done) {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (error) {
+    done(error);
+  }
+});
+
+
+
+passport.use(new LocalStrategy(
+  async function(email, password, done) {
+    try {
+      const user = await User.findOne({ email });
+
+      if (!user) {
+        console.log('Usuario no encontrado');
+        return done(null, false, { message: 'Correo electrónico incorrecto' });
+      }
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        console.log('Contraseña incorrecta');
+        return done(null, false, { message: 'Contraseña incorrecta' });
+      }
+
+      console.log('Inicio de sesión exitoso');
+      return done(null, user, { message: 'Inicio de sesión exitoso' });
+    } catch (error) {
+      console.error('Error de autenticación:', error);
+      return done(error);
+    }
+  }
+));
+
+router.get('/auth/github', passport.authenticate('github'));
+
+router.get('/auth/github/callback', 
+  passport.authenticate('github', { failureRedirect: '/login' }),
+  function(req, res) {
+    res.redirect('/profile');
+  }
+);
 
 router.get('/home', (req, res) => {
   const productosPath = join(currentDir, '..',  'productos.json');
@@ -75,7 +131,7 @@ router.get("/chat", async (req, res) => {
   }
 });
 
-router.get('/products', async (req, res) => {
+router.get('/products', checkLogin, async (req, res) => {
   try {
     const { limit = 10, page = 1, sort, query } = req.query;
     const sortOrder = sort === 'desc' ? -1 : 1;
@@ -89,16 +145,21 @@ router.get('/products', async (req, res) => {
       .limit(Number(limit));
 
     const totalPages = Math.ceil(totalProducts / limit);
-    const user = req.session.user;
+    const user = req.user; 
+    const userData = {
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+    };
     res.render('layouts/products', {
       products: products.map(product => ({
         _id: product._id,
         nombre: product.nombre,
         descripcion: product.descripcion,
         precio: product.precio,
-        cartId: '64c0be9764940b2a6dcfe013' 
+        cartId: '64c0be9764940b2a6dcfe013'
       })),
-      user: user,
+      user: userData, 
       currentPage: page,
       totalPages,
       prevPage: page > 1 ? page - 1 : null,
@@ -159,18 +220,30 @@ router.get('/api/carts/:cid', async (req, res) => {
 
 
 
-const checkLogin = (req, res, next) => {
-  if (!req.session.user) {
-    return res.redirect('/login');
-  }
-  next();
-};
+
+router.post('/login', (req, res, next) => {
+  passport.authenticate('local', (err, user, info) => {
+    if (err) {
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication Failed' });
+    }
+    req.login(user, (err) => {
+      if (err) {
+        return next(err);
+      }
+      return res.status(200).json({ message: 'Authentication Successful' });
+    });
+  })(req, res, next);
+});
+
 
 router.get('/login', (req, res) => {
-  if (req.session.user) {
+  if (req.isAuthenticated()) {
     return res.redirect('/profile'); 
   }
-  res.render('layouts/login'); 
+  res.render('layouts/login', { message: req.flash('error') }); 
 });
 
 router.get('/register', (req, res) => {
@@ -180,86 +253,49 @@ router.get('/register', (req, res) => {
   res.render('layouts/register'); 
 });
 
-
-router.get('/profile', checkLogin, async (req, res) => {
-  try {
-    const user = await User.findById(req.session.user._id);
-    if (!user) {
-      req.session.destroy();
-      return res.redirect('/login');
-    }
-    
-
-    const userData = {
-      first_name: user.first_name,
-      last_name: user.last_name,
-      email: user.email,
-      age: user.age,
-    };
-    
-    res.render('layouts/profile', { user: userData });
-  } catch (error) {
-    console.error('Error al obtener perfil:', error);
-    res.status(500).send('Error interno del servidor');
-  }
-});
-
-
-
-
 router.post('/register', async (req, res) => {
   const { first_name, last_name, email, age, password } = req.body;
-  
+
   try {
+    const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({
       first_name,
       last_name,
       email,
       age,
-      password,  
+      password: hashedPassword,
     });
 
-    const savedUser = await newUser.save();
+    await newUser.save(); 
 
-    console.log('Registro exitoso:', savedUser);
-
-    res.status(201).json({ message: 'Registro exitoso', user: savedUser });
+    res.status(201).json({ message: 'Registration Successful' });
   } catch (error) {
-    console.error('Error al registrar usuario:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    console.error('Error during registration:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
 
-
-
-
-router.post('/login', async (req, res) => {
-  try {
-
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-
-
-
-    if (email === 'adminCoder@coder.com' && password === 'adminCod3r123') {
-      user.role = 'admin'; 
-    }
-
-    req.session.user = user;
-
-    res.json({ message: 'Inicio de sesión exitoso' });
-  } catch (error) {
-    console.error('Error al iniciar sesión:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
+router.get('/profile', (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect('/login');
   }
+
+  const user = req.user; 
+
+  const userData = {
+    first_name: user.first_name,
+    last_name: user.last_name,
+    email: user.email,
+    age: user.age,
+  };
+
+  res.render('layouts/profile', { user: userData });
 });
 
 router.get('/logout', (req, res) => {
   req.session.destroy(); 
   res.redirect('/login'); 
 });
-
-
 
 export default router;
