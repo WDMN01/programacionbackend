@@ -298,4 +298,21 @@ router.get('/logout', (req, res) => {
   res.redirect('/login'); 
 });
 
+
+router.get('/api/sessions/current', (req, res) => {
+  if (req.isAuthenticated()) {
+    const user = req.user;
+    const userData = {
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      age: user.age,
+    };
+    res.status(200).json(userData);
+  } else {
+    res.status(401).json({ message: 'No authenticated user' });
+  }
+});
+
+
 export default router;
