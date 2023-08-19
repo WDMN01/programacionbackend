@@ -20,7 +20,8 @@ import User from './dao/models/userModel.js';
 import flash from 'connect-flash';
 import { allowInsecurePrototypeAccess } from '@handlebars/allow-prototype-access';
 import { Strategy as GitHubStrategy } from 'passport-github2'; 
-
+import mockingModule from './controllers/mockingModule.js';
+import { handleErrors } from './middlewares/errorHandler.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const app = express();
@@ -54,6 +55,10 @@ mongoose
       return res.status(403).json({ message: 'Acceso denegado' });
     }
   };
+
+app.use(mockingModule);
+app.use(handleErrors);
+  
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
