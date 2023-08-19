@@ -14,6 +14,11 @@ import { allowInsecurePrototypeAccess } from '@handlebars/allow-prototype-access
 import exphbs from 'express-handlebars';
 import passport from 'passport';
 import LocalStrategy from 'passport-local';
+import UserDTO from '../controllers/DTO/userdto.js';
+import Ticket from '../dao/models/ticketModel.js';
+import shortid from 'shortid';
+import jwt from 'jsonwebtoken';
+import { createTicketAndProcessCart } from '../controllers/purchaseController.js';
 
 const router = Router();
 
@@ -34,6 +39,26 @@ const checkLogin = (req, res, next) => {
   next(); 
 };
 
+const isAdmin = (req, res, next) => {
+  if (req.isAuthenticated() && req.user.role === 'admin') {
+    return next();
+  } else {
+    return res.status(403).json({ message: 'Acceso denegado' });
+  }
+};
+
+const isUser = (req, res, next) => {
+  if (req.isAuthenticated() && req.user.role === 'usuario') {
+    return next();
+  } else {
+    return res.status(403).json({ message: 'Acceso denegado' });
+  }
+};
+
+const generateUniqueCode = () => {
+  const code = shortid.generate();
+ return code;
+};
 
 passport.serializeUser(function(user, done) {
   done(null, user._id);
@@ -119,17 +144,16 @@ router.get('/realtimeproducts', async (req, res) => {
 
 
 
-router.get("/chat", async (req, res) => {
+router.get("/chat", isUser, async (req, res) => {
   try {
-
     const messages = await Message.find();
     res.render('layouts/chat', { messages });
-    
   } catch (error) {
     console.error("Error al obtener los mensajes:", error);
     res.status(500).send("Error interno del servidor");
   }
 });
+
 
 router.get('/products', checkLogin, async (req, res) => {
   try {
@@ -222,18 +246,23 @@ router.get('/api/carts/:cid', async (req, res) => {
 
 
 router.post('/login', (req, res, next) => {
-  passport.authenticate('local', (err, user, info) => {
+  passport.authenticate('local', async (err, user, info) => {
     if (err) {
       return res.status(500).json({ error: 'Internal Server Error' });
     }
     if (!user) {
       return res.status(401).json({ error: 'Authentication Failed' });
     }
-    req.login(user, (err) => {
+    req.login(user, async (err) => {
       if (err) {
         return next(err);
       }
-      return res.status(200).json({ message: 'Authentication Successful' });
+
+      const token = jwt.sign({ userId: user._id }, 'tu_secreto_secreto', {
+        expiresIn: '1h', // Cambia el tiempo de expiración según tus necesidades
+      });
+
+      return res.status(200).json({ message: 'Authentication Successful', token });
     });
   })(req, res, next);
 });
@@ -254,7 +283,7 @@ router.get('/register', (req, res) => {
 });
 
 router.post('/register', async (req, res) => {
-  const { first_name, last_name, email, age, password } = req.body;
+  const { first_name, last_name, email, age, password, role } = req.body;
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -265,6 +294,7 @@ router.post('/register', async (req, res) => {
       email,
       age,
       password: hashedPassword,
+      role, // Obtener el valor del campo "role" del cuerpo de la solicitud
     });
 
     await newUser.save();
@@ -274,6 +304,7 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 
 router.get('/profile', (req, res) => {
@@ -302,17 +333,52 @@ router.get('/logout', (req, res) => {
 router.get('/api/sessions/current', (req, res) => {
   if (req.isAuthenticated()) {
     const user = req.user;
-    const userData = {
-      first_name: user.first_name,
-      last_name: user.last_name,
-      email: user.email,
-      age: user.age,
-    };
-    res.status(200).json(userData);
+    const userDTO = new UserDTO(user);
+    res.status(200).json(userDTO);
   } else {
     res.status(401).json({ message: 'No authenticated user' });
   }
 });
 
+
+router.post('/formalize_purchase', async (req, res) => {
+  try {
+
+    const { total, purchaserEmail } = req.body;
+    const code = generateUniqueCode();
+    
+    const newTicket = new Ticket({
+      code,
+      amount: total,
+      purchaser: purchaserEmail,
+    });
+
+    await newTicket.save();
+
+    return res.status(201).json({ message: 'Ticket created successfully' });
+  } catch (error) {
+    console.error('Error creating ticket:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+router.post('/carts/:cid/purchase', isUser, async (req, res) => {
+  const cartId = req.params.cid;
+
+  try {
+    const userId = req.user._id; // Obtener el userId desde req.user
+
+    const productsNotPurchased = await createTicketAndProcessCart(userId); // Pasar userId a la función
+
+    if (productsNotPurchased.length === 0) {
+      return res.status(201).json({ message: 'Compra finalizada con éxito' });
+    } else {
+      return res.status(400).json({ message: 'Algunos productos no pudieron comprarse', productsNotPurchased });
+    }
+  } catch (error) {
+    console.error('Error al finalizar la compra:', error);
+    return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
 
 export default router;

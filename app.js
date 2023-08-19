@@ -39,6 +39,21 @@ mongoose
     console.error("Error al conectar a MongoDB:", error);
   });
 
+  const isAdmin = (req, res, next) => {
+    if (req.isAuthenticated() && req.user.role === 'admin') {
+      return next();
+    } else {
+      return res.status(403).json({ message: 'Acceso denegado' });
+    }
+  };
+  
+  const isUser = (req, res, next) => {
+    if (req.isAuthenticated() && req.user.role === 'usuario') {
+      return next();
+    } else {
+      return res.status(403).json({ message: 'Acceso denegado' });
+    }
+  };
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -143,7 +158,7 @@ app.get('/api/sessions/githubcallback',
 
 
 
-app.post("/productos", async (req, res) => {
+app.post("/productos", isAdmin, async (req, res) => {
   const { nombre, descripcion, precio, imagen, stock } = req.body;
 
   if (!nombre || !descripcion || !precio || !imagen || !stock) {
@@ -263,7 +278,7 @@ app.get("/productos/:pid", async (req, res) => {
   }
 });
 
-app.put("/productos/:pid", async (req, res) => {
+app.put("/productos/:pid", isAdmin, async (req, res) => {
   const productId = req.params.pid;
   const { nombre, descripcion, precio, imagen, codigo, stock } = req.body;
 
@@ -294,7 +309,7 @@ app.put("/productos/:pid", async (req, res) => {
   }
 });
 
-app.delete("/productos/:pid", async (req, res) => {
+app.delete("/productos/:pid", isAdmin, async (req, res) => {
   const productId = req.params.pid;
 
   try {

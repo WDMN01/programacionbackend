@@ -4,8 +4,23 @@ import Product from "../dao/models/productModel.js";
 import mongoose from "mongoose"; 
 const router = Router();
 
+const isAdmin = (req, res, next) => {
+  if (req.isAuthenticated() && req.user.role === 'admin') {
+    return next();
+  } else {
+    return res.status(403).json({ message: 'Acceso denegado' });
+  }
+};
 
-router.post("/carts", async (req, res) => {
+const isUser = (req, res, next) => {
+  if (req.isAuthenticated() && req.user.role === 'usuario') {
+    return next();
+  } else {
+    return res.status(403).json({ message: 'Acceso denegado' });
+  }
+};
+
+router.post("/carts", isAdmin, async (req, res) => {
   try {
     const newCart = new Cart({
       products: [],
@@ -42,7 +57,7 @@ router.get("/carts/:cid", async (req, res) => {
 
 // ...
 
-router.post("/carts/:cid/productos/:pid", async (req, res) => {
+router.post("/carts/:cid/productos/:pid", isUser, async (req, res) => {
   const cartId = req.params.cid;
   const productId = req.params.pid.trim().replace("\n", ""); 
 
@@ -86,7 +101,7 @@ router.post("/carts/:cid/productos/:pid", async (req, res) => {
   }
 });
 
-router.delete('/carts/:cid/products/:pid', async (req, res) => {
+router.delete('/carts/:cid/products/:pid', isUser, async (req, res) => {
   const { cid, pid } = req.params;
   try {
     const cart = await Cart.findById(cid);
