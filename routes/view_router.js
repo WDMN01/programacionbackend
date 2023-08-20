@@ -19,6 +19,7 @@ import Ticket from '../dao/models/ticketModel.js';
 import shortid from 'shortid';
 import jwt from 'jsonwebtoken';
 import { createTicketAndProcessCart } from '../controllers/purchaseController.js';
+import nodemailer from 'nodemailer';
 
 const router = Router();
 
@@ -197,6 +198,36 @@ router.get('/products', checkLogin, async (req, res) => {
   }
 });
 
+router.post('/products', checkLogin, async (req, res) => {
+  try {
+    const { nombre, descripcion, precio, stock, codigo, imagen } = req.body; // Obtener stock, codigo e imagen del req.body
+    const user = req.user;
+
+    if (user.role === 'premium') {
+      const newProduct = new Product({
+        nombre,
+        descripcion,
+        precio,
+        stock,
+        codigo,
+        imagen,
+        owner: user.email, 
+      });
+
+      await newProduct.save();
+
+      return res.status(201).json({ message: 'Producto creado exitosamente' });
+    } else {
+      return res.status(403).json({ message: 'Acceso denegado. Solo usuarios premium pueden crear productos' });
+    }
+  } catch (error) {
+    console.error('Error al crear el producto:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+
+
 
 router.get('/products/:pid', async (req, res) => {
   const productId = req.params.pid;
@@ -224,6 +255,60 @@ router.get('/products/:pid', async (req, res) => {
   }
 });
 
+router.put('/products/:pid', checkLogin, async (req, res) => {
+  try {
+    const { pid } = req.params;
+    const { nombre, descripcion, precio } = req.body;
+    const user = req.user;
+
+    const product = await Product.findById(pid);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    if (user.role === 'admin' || (user.role === 'premium' && product.owner === user.email)) {
+      product.nombre = nombre;
+      product.descripcion = descripcion;
+      product.precio = precio;
+      await product.save();
+
+      return res.status(200).json({ message: 'Producto modificado exitosamente' });
+    } else {
+      return res.status(403).json({ message: 'Acceso denegado' });
+    }
+  } catch (error) {
+    console.error('Error al modificar el producto:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+
+router.delete('/products/:pid', checkLogin, async (req, res) => {
+  try {
+    const { pid } = req.params;
+    const user = req.user;
+
+    const product = await Product.findById(pid);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    if (user.role === 'admin' || (user.role === 'premium' && product.owner === user.email)) {
+      await Product.deleteOne({ _id: pid });  // Utiliza el método .deleteOne() para eliminar el documento
+      return res.status(200).json({ message: 'Producto eliminado exitosamente' });
+    } else {
+      return res.status(403).json({ message: 'Acceso denegado' });
+    }
+  } catch (error) {
+    console.error('Error al eliminar el producto:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+
+
 router.get('/api/carts/:cid', async (req, res) => {
   const cartId = req.params.cid;
 
@@ -242,6 +327,33 @@ router.get('/api/carts/:cid', async (req, res) => {
   }
 });
 
+router.post('/carts/:cid/add/:pid', isUser, async (req, res) => {
+  try {
+    const { cid, pid } = req.params;
+    const user = req.user;
+
+    const cart = await Cart.findById(cid);
+
+    if (!cart) {
+      return res.status(404).json({ message: 'Carrito no encontrado' });
+    }
+
+    const product = await Product.findById(pid);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    if (user.role === 'premium' && product.owner === user.email) {
+      return res.status(403).json({ message: 'No puedes agregar a tu carrito un producto que te pertenece' });
+    }
+
+    // Resto de la lógica para agregar productos al carrito
+  } catch (error) {
+    console.error('Error al agregar producto al carrito:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
 
 
 
@@ -259,7 +371,7 @@ router.post('/login', (req, res, next) => {
       }
 
       const token = jwt.sign({ userId: user._id }, 'tu_secreto_secreto', {
-        expiresIn: '1h', // Cambia el tiempo de expiración según tus necesidades
+        expiresIn: '1h', 
       });
 
       return res.status(200).json({ message: 'Authentication Successful', token });
@@ -366,9 +478,9 @@ router.post('/carts/:cid/purchase', isUser, async (req, res) => {
   const cartId = req.params.cid;
 
   try {
-    const userId = req.user._id; // Obtener el userId desde req.user
+    const userId = req.user._id; 
 
-    const productsNotPurchased = await createTicketAndProcessCart(userId); // Pasar userId a la función
+    const productsNotPurchased = await createTicketAndProcessCart(userId); 
 
     if (productsNotPurchased.length === 0) {
       return res.status(201).json({ message: 'Compra finalizada con éxito' });
@@ -378,6 +490,120 @@ router.post('/carts/:cid/purchase', isUser, async (req, res) => {
   } catch (error) {
     console.error('Error al finalizar la compra:', error);
     return res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const token = jwt.sign({ email }, 'secret_key', { expiresIn: '1h' });
+
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: 'backendprogramingcoderproyect@gmail.com',
+        pass: 'inhbguryilsjbtgz',
+      },
+    });
+
+    const mailOptions = {
+      from: 'backendprogramingcoderproyect@gmail.com',
+      to: email,
+      subject: 'Restablece tu contraseña',
+      text: `Para restablecer tu contraseña, haz clic en este enlace: http://localhost:8080/reset-password/${token}`,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error(error);
+        res.status(500).send('Error al enviar el correo');
+      } else {
+        console.log('Correo enviado: ' + info.response);
+        res.send('Correo de restablecimiento enviado');
+      }
+    });
+  } catch (error) {
+    console.error('Error al enviar el correo de recuperación:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+router.get('/forgot-password', (req, res) => {
+  res.render('layouts/forgotPassword'); 
+});
+
+
+router.get('/reset-password/:token', (req, res) => {
+  const { token } = req.params;
+
+  jwt.verify(token, 'secret_key', (error, decoded) => {
+    if (error) {
+      console.error(error);
+      res.redirect('/forgot-password');
+    } else {
+      
+      res.render('layouts/resetPassword', { token });
+    }
+  });
+});
+
+
+router.post('/reset-password/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    jwt.verify(token, 'secret_key', async (error, decoded) => {
+      if (error) {
+        console.error(error);
+        return res.status(400).send('Token inválido o expirado');
+      }
+
+      const user = await User.findOne({ email: decoded.email });
+
+      if (!user) {
+        return res.status(404).json({ message: 'Usuario no encontrado' });
+      }
+
+      const isSamePassword = await bcrypt.compare(password, user.password);
+
+      if (isSamePassword) {
+        return res.status(400).json({ message: 'No puedes usar la misma contraseña anterior' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      user.password = hashedPassword;
+      await user.save();
+
+      return res.status(200).json({ message: 'Contraseña restablecida exitosamente' });
+    });
+  } catch (error) {
+    console.error('Error al restablecer la contraseña:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+router.put('/api/users/premium/:uid', isAdmin, async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const user = await User.findById(uid);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    user.role = user.role === 'premium' ? 'user' : 'premium';
+    await user.save();
+
+    return res.status(200).json({ message: `Rol de usuario actualizado a ${user.role}` });
+  } catch (error) {
+    console.error('Error al cambiar el rol del usuario:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
 

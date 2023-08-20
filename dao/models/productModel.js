@@ -3,29 +3,15 @@ const { Schema } = mongoose;
 
 const productSchema = new Schema({
   
-  nombre: {
-    type: String,
-    required: true,
-  },
-  descripcion: {
-    type: String,
-    required: true,
-  },
-  precio: {
-    type: Number,
-    required: true,
-  },
-  imagen: {
-    type: String,
-    required: true,
-  },
-  codigo: {
-    type: String,
-    required: true,
-  },
-  stock: {
-    type: Number,
-    required: true,
+  nombre: { type: String, required: true },
+  descripcion: { type: String },
+  precio: { type: Number, required: true },
+  stock: { type: Number, required: true },   // Campo requerido 'stock'
+  codigo: { type: String, required: true },  // Campo requerido 'codigo'
+  imagen: { type: String, required: true },
+  owner: {
+    type: String, 
+    default: 'admin',
   },
 });
 
