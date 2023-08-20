@@ -12,7 +12,7 @@ const productSchema = new Schema({
   owner: {
     type: String, 
     default: 'admin',
-  },
+  }, // Email del dueño del producto
 });
 
 const Product = mongoose.model("Product", productSchema);

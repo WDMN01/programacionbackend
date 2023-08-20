@@ -1,0 +1,78 @@
+openapi: 3.0.1
+info:
+  title: Módulo de Productos
+  description: API para gestionar productos
+  version: 1.0.0
+paths:
+  /products:
+    get:
+      summary: Obtener lista de productos
+      responses:
+        '200':
+          description: Lista de productos obtenida con éxito
+    post:
+      summary: Crear un nuevo producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: Producto creado exitosamente
+  /products/{pid}:
+    get:
+      summary: Obtener detalles de un producto
+      parameters:
+        - in: path
+          name: pid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalles del producto obtenidos con éxito
+    put:
+      summary: Actualizar un producto
+      parameters:
+        - in: path
+          name: pid
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '200':
+          description: Producto actualizado exitosamente
+    delete:
+      summary: Eliminar un producto
+      parameters:
+        - in: path
+          name: pid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Producto eliminado exitosamente
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precio:
+          type: number
+        imagen:
+          type: string
+        stock:
+          type: number

@@ -1,0 +1,134 @@
+openapi: 3.0.1
+info:
+  title: Módulo de Carrito
+  description: API para gestionar el carrito de compras
+  version: 1.0.0
+paths:
+  /api/carts:
+    post:
+      summary: Crear un nuevo carrito
+      responses:
+        '201':
+          description: Carrito creado exitosamente
+  /api/carts/{cid}:
+    get:
+      summary: Obtener productos del carrito
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Productos del carrito obtenidos con éxito
+    put:
+      summary: Actualizar productos del carrito
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Lista actualizada de productos en el carrito
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  product:
+                    type: string
+                  quantity:
+                    type: integer
+      responses:
+        '200':
+          description: Carrito actualizado exitosamente
+    delete:
+      summary: Vaciar el carrito
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Carrito vaciado exitosamente
+  /api/carts/{cid}/productos/{pid}:
+    post:
+      summary: Agregar producto al carrito
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Producto agregado al carrito exitosamente
+    put:
+      summary: Actualizar cantidad de producto en el carrito
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Nueva cantidad de producto en el carrito
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+      responses:
+        '200':
+          description: Cantidad de producto actualizada exitosamente
+    delete:
+      summary: Eliminar producto del carrito
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: pid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Producto eliminado del carrito exitosamente
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precio:
+          type: number
+        imagen:
+          type: string
+        stock:
+          type: number

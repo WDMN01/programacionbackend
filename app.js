@@ -24,6 +24,8 @@ import mockingModule from './controllers/mockingModule.js';
 import { handleErrors } from './middlewares/errorHandler.js';
 import winston from "winston";
 import fs from "fs";
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -83,7 +85,19 @@ mongoose
   });
 
   const logger = process.env.NODE_ENV === "production" ? prodLogger : devLogger;
-
+  const options = {
+    definition: {
+      openapi: '3.0.1',
+      info: {
+        title: 'API proyectobackend',
+        version: '1.0.0',
+        description: 'Documentación de la API',
+      },
+    },
+    apis: [`${__dirname}/docs/**/*.yaml`], 
+  };
+  const swaggerDocs = swaggerJsdoc(options);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 app.use(mockingModule);
 app.use(handleErrors);
 app.use((err, req, res, next) => {  
