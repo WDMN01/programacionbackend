@@ -22,6 +22,9 @@ import { allowInsecurePrototypeAccess } from '@handlebars/allow-prototype-access
 import { Strategy as GitHubStrategy } from 'passport-github2'; 
 import mockingModule from './controllers/mockingModule.js';
 import { handleErrors } from './middlewares/errorHandler.js';
+import winston from "winston";
+import fs from "fs";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const app = express();
@@ -33,11 +36,11 @@ mongoose
     useUnifiedTopology: true,
   })
   .then(() => {
-    console.log("Conexión a MongoDB exitosa");
+    logger.info("Conexión a MongoDB exitosa");
     cargarProductosIniciales();
   })
   .catch((error) => {
-    console.error("Error al conectar a MongoDB:", error);
+    logger.error("Error al conectar a MongoDB:", error);
   });
 
   const isAdmin = (req, res, next) => {
@@ -56,9 +59,37 @@ mongoose
     }
   };
 
+
+  const devLogger = winston.createLogger({
+    level: "debug",
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple()
+    ),
+    transports: [new winston.transports.Console()],
+  });
+  
+   
+  const prodLogger = winston.createLogger({
+    level: "info",
+    format: winston.format.json(),
+    transports: [
+      new winston.transports.Console(),
+      new winston.transports.File({
+        filename: "errors.log",
+        level: "error",
+      }),
+    ],
+  });
+
+  const logger = process.env.NODE_ENV === "production" ? prodLogger : devLogger;
+
 app.use(mockingModule);
 app.use(handleErrors);
-  
+app.use((err, req, res, next) => {  
+  logger.error(`Error en la aplicación: ${err.message}`);
+  res.status(500).send('Ocurrió un error en el servidor');
+});  
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -197,15 +228,9 @@ app.get("/productos", async (req, res) => {
   try {
     
     const { limit = 10, page = 1, sort, query } = req.query;
-    const sortOrder = sort === "desc" ? -1 : 1;
-
-    
+    const sortOrder = sort === "desc" ? -1 : 1;    
     const searchQuery = query ? { categoria: query } : {};
-
-    
     const totalProducts = await Product.countDocuments(searchQuery);
-
-    
     const skip = (page - 1) * limit;
 
     
@@ -213,8 +238,6 @@ app.get("/productos", async (req, res) => {
       .sort({ precio: sortOrder })
       .skip(skip)
       .limit(Number(limit));
-
-    
     const totalPages = Math.ceil(totalProducts / limit);
 
     
@@ -230,10 +253,10 @@ app.get("/productos", async (req, res) => {
       prevLink: page > 1 ? `/productos?limit=${limit}&page=${page - 1}&sort=${sort}&query=${query}` : null,
       nextLink: page < totalPages ? `/productos?limit=${limit}&page=${page + 1}&sort=${sort}&query=${query}` : null,
     };
-
+    logger.info('Solicitud de lista de productos exitosa');
     res.json(response);
   } catch (error) {
-    console.error("Error al obtener productos desde la base de datos:", error);
+    logger.error(`Error al obtener productos desde la base de datos: ${error}`);
     res.status(500).json({ status: "error", message: "Error interno del servidor" });
   }
 });
@@ -250,11 +273,11 @@ const io = new Server(httpServer);
 
 
 io.on("connection", (socket) => {
-  console.log("Nuevo cliente conectado");
+  logger.debug('Nuevo cliente conectado');
 
   
   socket.on("newProduct", (producto) => {
-   
+    logger.debug('Evento newProduct recibido');
     io.emit("newProduct", producto);
   });
 
@@ -309,7 +332,7 @@ app.put("/productos/:pid", isAdmin, async (req, res) => {
 
     res.json(updatedProduct);
   } catch (error) {
-    console.error("Error al actualizar el producto en la base de datos:", error);
+    logger.error(`Error al actualizar el producto en la base de datos: ${error}`);
     res.status(500).send("Error interno del servidor");
   }
 });
@@ -331,11 +354,18 @@ app.delete("/productos/:pid", isAdmin, async (req, res) => {
 
     res.send("Producto eliminado exitosamente");
   } catch (error) {
-    console.error("Error al eliminar el producto de la base de datos:", error);
+    logger.error(`Error al eliminar el producto de la base de datos: ${error}`);
     res.status(500).send("Error interno del servidor");
   }
 });
 
+app.get("/loggerTest", (req, res) => {
+  logger.debug("Esto es un mensaje de debug");
+  logger.info("Esto es un mensaje de info");
+  logger.warn("Esto es un mensaje de advertencia");
+  logger.error("Esto es un mensaje de error");
+  res.send("Logs generados en la consola y en el archivo de errores");
+});
 
 
 io.on("connection", (socket) => {
@@ -367,6 +397,6 @@ const Message = mongoose.model("Message", messageSchema);
 export default Message;
 
 httpServer.listen(8080, () => {
-  console.log("Servidor escuchando en el puerto 8080");
+  logger.info("Servidor escuchando en el puerto 8080");
 });
 export { app, io, httpServer };

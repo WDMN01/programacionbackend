@@ -81,19 +81,19 @@ passport.use(new LocalStrategy(
       const user = await User.findOne({ email });
 
       if (!user) {
-        console.log('Usuario no encontrado');
+        logger.error('Usuario no encontrado');
         return done(null, false, { message: 'Correo electrónico incorrecto' });
       }
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
-        console.log('Contraseña incorrecta');
+        logger.error('Contraseña incorrecta');
         return done(null, false, { message: 'Contraseña incorrecta' });
       }
 
-      console.log('Inicio de sesión exitoso');
+      logger.info('Inicio de sesión exitoso');
       return done(null, user, { message: 'Inicio de sesión exitoso' });
     } catch (error) {
-      console.error('Error de autenticación:', error);
+      logger.error('Error de autenticación:', error);
       return done(error);
     }
   }
@@ -113,7 +113,7 @@ router.get('/home', (req, res) => {
 
   readFile(productosPath, 'utf8', (err, data) => {
     if (err) {
-      console.error(err);
+      logger.error('Error al leer el archivo de productos:', err);
       return res.status(500).send('Error al leer el archivo de productos.');
     }
 
@@ -129,15 +129,14 @@ router.get('/realtimeproducts', async (req, res) => {
     const products = await Product.find();
 
     io.on("connection", socket => {
-      console.log("Nuevo cliente conectado a la vista de productos en tiempo real");
-
+      logger.info('Nuevo cliente conectado a la vista de productos en tiempo real');
 
       socket.emit("productos", products);
     });
 
     res.render('layouts/realTimeProducts', { products });
   } catch (error) {
-    console.error('Error al obtener productos desde la base de datos:', error);
+    logger.error('Error al obtener productos desde la base de datos:', error);
     res.status(500).send('Error interno del servidor');
   }
 });
@@ -147,9 +146,10 @@ router.get('/realtimeproducts', async (req, res) => {
 router.get("/chat", isUser, async (req, res) => {
   try {
     const messages = await Message.find();
+    logger.info('Usuario accedió a la página de chat');
     res.render('layouts/chat', { messages });
   } catch (error) {
-    console.error("Error al obtener los mensajes:", error);
+    logger.error('Error al obtener los mensajes:', error);
     res.status(500).send("Error interno del servidor");
   }
 });
@@ -294,7 +294,7 @@ router.post('/register', async (req, res) => {
       email,
       age,
       password: hashedPassword,
-      role, // Obtener el valor del campo "role" del cuerpo de la solicitud
+      role, 
     });
 
     await newUser.save();
