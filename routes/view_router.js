@@ -240,19 +240,18 @@ router.get('/products/:pid', async (req, res) => {
       return;
     }
 
-    res.render('layouts/productDetails', { 
-      product: {
-        _id: product._id,
-        nombre: product.nombre,
-        descripcion: product.descripcion,
-        precio: product.precio,
-
-      }
+    res.json({
+      _id: product._id,
+      nombre: product.nombre,
+      descripcion: product.descripcion,
+      precio: product.precio,
     });
+    
   } catch (error) {
     console.error('Error al obtener el producto:', error);
     res.status(500).json({ message: 'Error interno del servidor' });
   }
+
 });
 
 router.put('/products/:pid', checkLogin, async (req, res) => {
