@@ -28,6 +28,10 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import usersRouter from './routes/usersRouter.js';
 import multer from 'multer';
+import adminRouter from './routes/adminRouter.js';
+import * as adminController from './controllers/adminController.js';
+
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,7 +50,6 @@ mongoose
   .catch((error) => {
     logger.error("Error al conectar a MongoDB:", error);
   });
-
   const isAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
       return next();
@@ -117,6 +120,7 @@ app.use((err, req, res, next) => {
 });  
 app.use(upload.array('documents'));
 app.use('/api/users', usersRouter);
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({
@@ -217,37 +221,8 @@ app.get('/api/sessions/githubcallback',
     res.redirect('/products');
   }
 );
-const users = [
-  {
-      "_id": "64e1a08c559e628273f4b52f",
-      "first_name": "prueba",
-      "last_name": "premium",
-      "email": "premiump@gmail.com",
-      "age": 23,
-      "password": "$2b$10$vPu21ckkgzbd5sOKFZF6ieH5RmRCfqSiy5gsqEZKyKhVhWMw3d.66",
-      "role": "premium",
-      "__v": 0,
-      "documents": []
-  },
 
-];
-
-
-function getUserDetails(userId) {
-  return users.find(user => user._id === userId);
-}
-app.get('/api/users/:id/premium', (req, res) => {
-  const userId = req.params.id;
-  const user = getUserDetails(userId);
-
-  if (user && user.role === 'premium') {
-      res.status(200).json(user);
-  } else {
-      res.status(404).json({ message: 'Usuario premium no encontrado' });
-  }
-});
-
-
+app.get('/admin', isAdmin, adminController.getAdminPage);
 
 app.post("/productos", isAdmin, async (req, res) => {
   const { nombre, descripcion, precio, imagen, stock } = req.body;

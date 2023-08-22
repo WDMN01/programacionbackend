@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Panel de Administración</title>
+</head>
+<body>
+    <h1>Panel de Administración</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Correo</th>
+                <th>Tipo de Cuenta</th>
+            </tr>
+        </thead>
+        <tbody>
+{{#each usersData}}
+  <div class="user">
+    <p>Nombre: {{first_name}}</p>
+    <p>Apellido: {{last_name}}</p>
+    <p>Email: {{email}}</p>
+    <p>Rol: {{role}}</p>
+  </div>
+{{/each}}
+
+        </tbody>
+    </table>
+</body>
+</html>

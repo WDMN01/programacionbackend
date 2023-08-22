@@ -2,8 +2,17 @@ import express from 'express';
 import multer from 'multer';
 import * as userController from '../controllers/userController.js'; 
 import User from '../dao/models/userModel.js';
-const usersRouter = express.Router();
+import nodemailer from 'nodemailer';
 
+
+const usersRouter = express.Router();
+const transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: {
+        user: 'backendprogramingcoderproyect@gmail.com',
+        pass: 'inhbguryilsjbtgz',
+    },
+});
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         let folder = 'uploads/documents';
@@ -99,6 +108,39 @@ usersRouter.put('/premium/:uid', isAdmin, async (req, res) => {
         }
     } catch (error) {
         console.error('Error al cambiar el rol del usuario:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+});
+
+usersRouter.get('/', async (req, res) => {
+    try {
+        const users = await User.find({}, 'first_name last_name email role');
+        res.status(200).json(users);
+    } catch (error) {
+        console.error('Error al obtener usuarios:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
+    }
+});
+
+usersRouter.delete('/', async (req, res) => {
+    try {
+        const currentTime = new Date();
+        const inactiveUsers = await User.find({ last_connection: { $lt: new Date(currentTime - 48 * 60 * 60 * 1000) } });
+
+        inactiveUsers.forEach(async user => {
+            await user.remove();
+            const mailOptions = {
+                from: 'your-email@example.com',
+                to: user.email,
+                subject: 'Cuenta eliminada por inactividad',
+                text: 'Tu cuenta ha sido eliminada debido a la inactividad. Si deseas reactivarla, contáctanos.'
+            };
+            await transporter.sendMail(mailOptions);
+        });
+
+        res.status(200).json({ message: 'Usuarios inactivos eliminados y notificados' });
+    } catch (error) {
+        console.error('Error al eliminar usuarios inactivos:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
     }
 });
