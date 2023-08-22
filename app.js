@@ -26,6 +26,8 @@ import winston from "winston";
 import fs from "fs";
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import usersRouter from './routes/usersRouter.js';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -97,6 +99,15 @@ mongoose
     apis: [`${__dirname}/docs/**/*.yaml`], 
   };
   const swaggerDocs = swaggerJsdoc(options);
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/documents');
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+  });
+  const upload = multer({ storage: storage });
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 app.use(mockingModule);
 app.use(handleErrors);
@@ -104,7 +115,8 @@ app.use((err, req, res, next) => {
   logger.error(`Error en la aplicación: ${err.message}`);
   res.status(500).send('Ocurrió un error en el servidor');
 });  
-
+app.use(upload.array('documents'));
+app.use('/api/users', usersRouter);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(session({
@@ -205,6 +217,35 @@ app.get('/api/sessions/githubcallback',
     res.redirect('/products');
   }
 );
+const users = [
+  {
+      "_id": "64e1a08c559e628273f4b52f",
+      "first_name": "prueba",
+      "last_name": "premium",
+      "email": "premiump@gmail.com",
+      "age": 23,
+      "password": "$2b$10$vPu21ckkgzbd5sOKFZF6ieH5RmRCfqSiy5gsqEZKyKhVhWMw3d.66",
+      "role": "premium",
+      "__v": 0,
+      "documents": []
+  },
+
+];
+
+
+function getUserDetails(userId) {
+  return users.find(user => user._id === userId);
+}
+app.get('/api/users/:id/premium', (req, res) => {
+  const userId = req.params.id;
+  const user = getUserDetails(userId);
+
+  if (user && user.role === 'premium') {
+      res.status(200).json(user);
+  } else {
+      res.status(404).json({ message: 'Usuario premium no encontrado' });
+  }
+});
 
 
 

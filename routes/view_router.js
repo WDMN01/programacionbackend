@@ -20,7 +20,8 @@ import shortid from 'shortid';
 import jwt from 'jsonwebtoken';
 import { createTicketAndProcessCart } from '../controllers/purchaseController.js';
 import nodemailer from 'nodemailer';
-
+import multer from 'multer';
+import { uploadDocuments } from '../controllers/userController.js';
 const router = Router();
 
 handlebars.registerHelper('ifEqual', function (arg1, arg2, options) {
@@ -60,7 +61,15 @@ const generateUniqueCode = () => {
   const code = shortid.generate();
  return code;
 };
-
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+      cb(null, 'uploads/documents');
+  },
+  filename: function (req, file, cb) {
+      cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
 passport.serializeUser(function(user, done) {
   done(null, user._id);
 });
@@ -198,11 +207,30 @@ router.get('/products', checkLogin, async (req, res) => {
   }
 });
 
+router.get('/tickets/:ticketId', async (req, res) => {
+  const ticketId = req.params.ticketId;
+
+  try {
+    const ticket = await Ticket.findById(ticketId);
+
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket no encontrado' });
+    }
+    res.render('layouts/ticket', { ticket });
+
+  } catch (error) {
+    console.error('Error al obtener los detalles del ticket:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+
+
 router.post('/products', checkLogin, async (req, res) => {
   try {
     const { nombre, descripcion, precio, stock, codigo, imagen } = req.body; // Obtener stock, codigo e imagen del req.body
     const user = req.user;
-
+    const cartId = '64c0be9764940b2a6dcfe013';
     if (user.role === 'premium') {
       const newProduct = new Product({
         nombre,
@@ -473,24 +501,74 @@ router.post('/formalize_purchase', async (req, res) => {
   }
 });
 
+
 router.post('/carts/:cid/purchase', isUser, async (req, res) => {
   const cartId = req.params.cid;
 
   try {
-    const userId = req.user._id; 
+    const userId = req.user._id;
 
-    const productsNotPurchased = await createTicketAndProcessCart(userId); 
+    const cart = await Cart.findById(cartId).populate('products.product');
 
-    if (productsNotPurchased.length === 0) {
-      return res.status(201).json({ message: 'Compra finalizada con éxito' });
-    } else {
-      return res.status(400).json({ message: 'Algunos productos no pudieron comprarse', productsNotPurchased });
+    if (!cart) {
+      return res.status(404).json({ message: 'Carrito no encontrado' });
     }
+
+    const productsNotPurchased = [];
+
+    for (const cartProduct of cart.products) {
+      const product = cartProduct.product;
+      if (product.stock >= cartProduct.quantity) {
+        // Restar el stock del producto y guardar los cambios
+        product.stock -= cartProduct.quantity;
+        await product.save();
+      } else {
+        productsNotPurchased.push(product._id);
+      }
+    }
+
+    const productsPurchased = cart.products.filter(
+      cartProduct => !productsNotPurchased.includes(cartProduct.product._id)
+    );
+
+    if (productsPurchased.length === 0) {
+      return res.status(400).json({ message: 'No hay productos para comprar' });
+    }
+
+    // Crear un nuevo ticket
+    const totalAmount = productsPurchased.reduce(
+      (total, cartProduct) => total + cartProduct.product.precio * cartProduct.quantity,
+      0
+    );
+
+    const newTicket = new Ticket({
+      code: generateUniqueCode(),
+      amount: totalAmount,
+      purchaser: req.user.email,
+    });
+
+    await newTicket.save();
+
+    // Actualizar el carrito con los productos no comprados
+    cart.products = productsNotPurchased.map(productId => ({
+      product: productId,
+      quantity: cart.products.find(cartProduct => cartProduct.product._id.equals(productId)).quantity,
+    }));
+
+    await cart.save();
+
+    return res.status(201).json({ message: 'Compra finalizada con éxito', ticket: newTicket });
   } catch (error) {
     console.error('Error al finalizar la compra:', error);
     return res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
+
+
+
+
+
+
 
 router.post('/forgot-password', async (req, res) => {
   try {
@@ -587,23 +665,5 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 });
 
-router.put('/api/users/premium/:uid', isAdmin, async (req, res) => {
-  try {
-    const { uid } = req.params;
-    const user = await User.findById(uid);
-
-    if (!user) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
-
-    user.role = user.role === 'premium' ? 'user' : 'premium';
-    await user.save();
-
-    return res.status(200).json({ message: `Rol de usuario actualizado a ${user.role}` });
-  } catch (error) {
-    console.error('Error al cambiar el rol del usuario:', error);
-    res.status(500).json({ message: 'Error interno del servidor' });
-  }
-});
 
 export default router;

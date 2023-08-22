@@ -1,0 +1,9 @@
+<h1>Ticket de Compra</h1>
+<p>Código del ticket: {{ticket.code}}</p>
+<p>Total de la compra: {{ticket.amount}}</p>
+<p>Productos comprados:</p>
+<ul>
+  {{#each ticket.products}}
+    <li>{{this.product.nombre}} - Cantidad: {{this.quantity}}</li>
+  {{/each}}
+</ul>
